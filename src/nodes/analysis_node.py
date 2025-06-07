@@ -1,5 +1,7 @@
 # src/nodes/analysis_node.py
 import time
+import os
+import json
 from typing import Optional
 from langchain_groq import ChatGroq
 from langchain_core.output_parsers import PydanticOutputParser
@@ -7,9 +9,9 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from src.state.graph_state import HealthAdvisorState
 from src.models.data_models import ExtractedIngredientsData, HealthAnalysisReport
-from src.tools.search_tool import WebSearchTool
+from src.tools.mcp_search_tool import SyncMCPSearchTool
 
-TEXT_ANALYSIS_MODEL = "compound-beta-mini" 
+TEXT_ANALYSIS_MODEL = "llama3-8b-8192" 
 
 def _create_analysis_node_factory(
     analysis_type: str,
@@ -36,9 +38,8 @@ def _create_analysis_node_factory(
             A function that processes the state and performs the analysis.
         """
 
-        # Initialize the LLM and tools
+        # Initialize the LLM
         llm = ChatGroq(groq_api_key=groq_api_key, model_name=TEXT_ANALYSIS_MODEL, temperature=0.2)
-        search_tool = WebSearchTool()
         parser = PydanticOutputParser(pydantic_object=HealthAnalysisReport)
         
         format_instructions = parser.get_format_instructions()
@@ -83,10 +84,27 @@ def _create_analysis_node_factory(
             ingredients_list_str = ", ".join(extracted_data.ingredients)
             product_name = extracted_data.product_name or "the food product"
             
-            # Perform a targeted web search for context
-            search_query = f"{product_name} {ingredients_list_str[:100]} {analysis_type} effects"
-            print(f"Performing web search for {analysis_type}: {search_query}")
-            search_context = search_tool.search(query=search_query)
+            # Perform a targeted web search for context using MCP search tool
+            mcp_server_path = os.path.join(os.path.dirname(__file__), "..", "mcp_servers", "serpapi_server.py")
+            search_tool = SyncMCPSearchTool(mcp_server_path)
+            search_query = f"{product_name} {ingredients_list_str[:100]} {analysis_type} health effects nutrition"
+
+            try:
+                search_result = search_tool.search(search_query, search_type="health")
+                search_data = json.loads(search_result)
+                
+                # Format search context from MCP results
+                if "results" in search_data and search_data["results"]:
+                    search_context = "\n".join([
+                        f"Title: {result['title']}\nSummary: {result['snippet']}\n"
+                        for result in search_data["results"]
+                    ])
+                else:
+                    search_context = "No recent search results available."
+                    
+            except Exception as e:
+                print(f"MCP search error for {analysis_type}: {e}")
+                search_context = f"Search unavailable: {str(e)}"
 
             try:
                 report: HealthAnalysisReport = chain.invoke({
@@ -126,6 +144,7 @@ Respond STRICTLY in the following JSON format:
 {format_instructions}
 Ensure 'analysis_type' is '{analysis_type}'.
 'health_score_impact' should be a positive number (0 to 10) if beneficial, 0 otherwise.
+CRITICAL: You must respond with ONLY valid JSON. Do not include any explanatory text, introductions, or conclusions outside the JSON structure.
 """
 BENEFITS_HUMAN_PROMPT = """
 Product Name: {product_name}
@@ -151,6 +170,7 @@ Respond STRICTLY in the following JSON format:
 {format_instructions}
 Ensure 'analysis_type' is '{analysis_type}'.
 'health_score_impact' should be a negative number (-10 to 0) if detrimental, 0 otherwise.
+CRITICAL: You must respond with ONLY valid JSON. Do not include any explanatory text, introductions, or conclusions outside the JSON structure.
 """
 DISADVANTAGES_HUMAN_PROMPT = """
 Product Name: {product_name}
@@ -175,6 +195,7 @@ Respond STRICTLY in the following JSON format:
 {format_instructions}
 Ensure 'analysis_type' is '{analysis_type}'.
 'health_score_impact' can be positive or negative (-5 to +5) based on disease risk modification, 0 if neutral.
+CRITICAL: You must respond with ONLY valid JSON. Do not include any explanatory text, introductions, or conclusions outside the JSON structure.
 """
 DISEASE_HUMAN_PROMPT = """
 Product Name: {product_name}

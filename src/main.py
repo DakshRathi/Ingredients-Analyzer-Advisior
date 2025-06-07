@@ -70,13 +70,33 @@ async def run_health_analysis(image_path: str):
     print(f"--- Total processing time: {total_processing_time:.2f} seconds ---")
 
 
+# Test MCP integration
+async def test_mcp_integration():
+    """Test MCP SerpAPI integration"""
+
+    print("\n--- Testing MCP SerpAPI Integration ---")
+    
+    from src.tools.mcp_search_tool import MCPSearchTool
+    
+    mcp_server_path = Path(__file__).parent / "mcp_servers" / "serpapi_server.py"
+    search_tool = MCPSearchTool(str(mcp_server_path))
+    
+    # Test health search
+    result = await search_tool.search_health_info("vitamin C benefits immune system")
+    print(f"Health search result: {result[:200]}...")
+    
+    # Test alternatives search
+    alt_result = await search_tool.search_alternatives("potato chips")
+    print(f"Alternatives search result: {alt_result[:200]}...")
+    
+
 async def main():
     """
     Main entry point for the health advisor application.
     This function runs the health analysis on a test image.
     """
 
-    test_image_filename = "Real.jpg"
+    test_image_filename = "test_images/Real.jpg"
     await run_health_analysis(test_image_filename)
 
 

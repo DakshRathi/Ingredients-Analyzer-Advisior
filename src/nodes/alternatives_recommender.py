@@ -1,4 +1,6 @@
 import time
+import json
+import os
 from typing import Optional
 from langchain_groq import ChatGroq
 from langchain_core.output_parsers import PydanticOutputParser
@@ -6,16 +8,18 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from src.state.graph_state import HealthAdvisorState
 from src.models.data_models import HealthyAlternativesReport, HealthAnalysisReport
-from src.tools.search_tool import WebSearchTool
+from src.tools.mcp_search_tool import SyncMCPSearchTool 
 
-TEXT_ANALYSIS_MODEL = "compound-beta-mini"  
+TEXT_ANALYSIS_MODEL = "llama3-8b-8192"  
 
 def create_alternatives_recommender_node(groq_api_key: str):
     """
     Factory function to create the healthy alternatives recommender node.
     """
+
     llm = ChatGroq(groq_api_key=groq_api_key, model_name=TEXT_ANALYSIS_MODEL, temperature=0.3)
-    search_tool = WebSearchTool()
+    mcp_server_path = os.path.join(os.path.dirname(__file__), "..", "mcp_servers", "serpapi_server.py")
+    search_tool = SyncMCPSearchTool(mcp_server_path)
     parser = PydanticOutputParser(pydantic_object=HealthyAlternativesReport)
 
     format_instructions = parser.get_format_instructions()
@@ -93,10 +97,23 @@ def create_alternatives_recommender_node(groq_api_key: str):
         product_name = extracted_data.product_name or "the food product"
         ingredients_list_str = ", ".join(extracted_data.ingredients)
 
-        # Search for alternatives based on product type or key ingredients
-        search_query = f"healthy alternatives for {product_name} with {ingredients_list_str[:50]}"
-        print(f"Performing web search for alternatives: {search_query}")
-        search_context = search_tool.search(query=search_query) # Concise search context
+        try:
+            query = product_name + ingredients_list_str[:100]
+            alternatives_search_result = search_tool.search(query, search_type="alternatives")
+            alternatives_data = json.loads(alternatives_search_result)
+            
+            if "alternatives_search" in alternatives_data:
+                search_context = "\n".join([
+                    f"Alternative suggestion: {alt['title']}\nDetails: {alt['snippet']}\n"
+                    for alt in alternatives_data["alternatives_search"]
+                ])
+            else:
+                search_context = "No alternative suggestions found."
+                
+        except Exception as e:
+            print(f"MCP alternatives search error: {e}")
+            search_context = f"Alternatives search unavailable: {str(e)}"
+        
         # print(f"Search context for alternatives:\n{search_context}")
 
         try:
