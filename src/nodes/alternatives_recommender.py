@@ -8,7 +8,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from src.state.graph_state import HealthAdvisorState
 from src.models.data_models import HealthyAlternativesReport, HealthAnalysisReport
-from src.tools.mcp_search_tool import SyncMCPSearchTool 
+from src.tools.mcp_search_tool import MCPSearchTool 
 
 TEXT_ANALYSIS_MODEL = "llama3-8b-8192"  
 
@@ -19,7 +19,7 @@ def create_alternatives_recommender_node(groq_api_key: str):
 
     llm = ChatGroq(groq_api_key=groq_api_key, model_name=TEXT_ANALYSIS_MODEL, temperature=0.3)
     mcp_server_path = os.path.join(os.path.dirname(__file__), "..", "mcp_servers", "serpapi_server.py")
-    search_tool = SyncMCPSearchTool(mcp_server_path)
+    search_tool = MCPSearchTool(mcp_server_path)
     parser = PydanticOutputParser(pydantic_object=HealthyAlternativesReport)
 
     format_instructions = parser.get_format_instructions()
@@ -65,7 +65,7 @@ def create_alternatives_recommender_node(groq_api_key: str):
     
     chain = prompt | llm | parser
 
-    def alternatives_recommender_node(state: HealthAdvisorState) -> HealthAdvisorState:
+    async def alternatives_recommender_node(state: HealthAdvisorState) -> HealthAdvisorState:
         print("--- Running Alternatives Recommender Node ---")
         state['current_task_start_time'] = time.time()
 
@@ -99,7 +99,7 @@ def create_alternatives_recommender_node(groq_api_key: str):
 
         try:
             query = product_name + ingredients_list_str[:100]
-            alternatives_search_result = search_tool.search(query, search_type="alternatives")
+            alternatives_search_result = await search_tool.search_food_alternatives(query)
             alternatives_data = json.loads(alternatives_search_result)
             
             if "alternatives_search" in alternatives_data:
@@ -117,7 +117,7 @@ def create_alternatives_recommender_node(groq_api_key: str):
         # print(f"Search context for alternatives:\n{search_context}")
 
         try:
-            report: HealthyAlternativesReport = chain.invoke({
+            report: HealthyAlternativesReport = await chain.ainvoke({
                 "product_name": product_name,
                 "ingredients_list": ingredients_list_str,
                 "benefits_summary": benefits_summary,

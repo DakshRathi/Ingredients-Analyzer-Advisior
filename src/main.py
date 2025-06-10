@@ -1,3 +1,4 @@
+# src/main.py
 import asyncio
 import os
 import time
@@ -86,7 +87,7 @@ async def test_mcp_integration():
     print(f"Health search result: {result[:200]}...")
     
     # Test alternatives search
-    alt_result = await search_tool.search_alternatives("potato chips")
+    alt_result = await search_tool.search_food_alternatives("potato chips")
     print(f"Alternatives search result: {alt_result[:200]}...")
     
 

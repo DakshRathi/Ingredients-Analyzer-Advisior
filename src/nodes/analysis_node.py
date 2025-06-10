@@ -1,5 +1,6 @@
 # src/nodes/analysis_node.py
 import time
+import re
 import os
 import json
 from typing import Optional
@@ -9,7 +10,7 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from src.state.graph_state import HealthAdvisorState
 from src.models.data_models import ExtractedIngredientsData, HealthAnalysisReport
-from src.tools.mcp_search_tool import SyncMCPSearchTool
+from src.tools.mcp_search_tool import MCPSearchTool
 
 TEXT_ANALYSIS_MODEL = "llama3-8b-8192" 
 
@@ -53,7 +54,7 @@ def _create_analysis_node_factory(
         
         chain = prompt | llm | parser
 
-        def analysis_node(state: HealthAdvisorState) -> HealthAdvisorState:
+        async def analysis_node(state: HealthAdvisorState) -> HealthAdvisorState:
             node_name = f"{analysis_type.capitalize()} Analysis Node"
             print(f"--- Running {node_name} ---")
             start_time = time.time()
@@ -86,11 +87,11 @@ def _create_analysis_node_factory(
             
             # Perform a targeted web search for context using MCP search tool
             mcp_server_path = os.path.join(os.path.dirname(__file__), "..", "mcp_servers", "serpapi_server.py")
-            search_tool = SyncMCPSearchTool(mcp_server_path)
+            search_tool = MCPSearchTool(mcp_server_path)
             search_query = f"{product_name} {ingredients_list_str[:100]} {analysis_type} health effects nutrition"
 
             try:
-                search_result = search_tool.search(search_query, search_type="health")
+                search_result = await search_tool.search_health_info(search_query)
                 search_data = json.loads(search_result)
                 
                 # Format search context from MCP results
@@ -107,7 +108,7 @@ def _create_analysis_node_factory(
                 search_context = f"Search unavailable: {str(e)}"
 
             try:
-                report: HealthAnalysisReport = chain.invoke({
+                report: HealthAnalysisReport = await chain.ainvoke({
                     "product_name": product_name,
                     "ingredients_list": ingredients_list_str,
                     "allergens_list": ", ".join(extracted_data.allergens),
