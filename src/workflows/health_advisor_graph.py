@@ -21,16 +21,16 @@ NODE_RECOMMEND_ALTERNATIVES = "recommend_alternatives"
 NODE_COMPILE_FINAL_REPORT = "compile_final_report"
 
 
-def create_health_advisor_graph(groq_api_key: str):
+def create_health_advisor_graph(groq_api_key: str, google_api_key: str, mcp_tools: list) -> StateGraph:
     """
     Creates and compiles the LangGraph for the health advisor application.
     """
     # Create node functions using their factories
     extract_ingredients_func = create_ingredient_extractor_node(groq_api_key)
-    analyze_benefits_func = create_benefits_analysis_node(groq_api_key)
-    analyze_disadvantages_func = create_disadvantages_analysis_node(groq_api_key)
-    analyze_diseases_func = create_disease_analysis_node(groq_api_key)
-    recommend_alternatives_func = create_alternatives_recommender_node(groq_api_key)
+    analyze_benefits_func = create_benefits_analysis_node(google_api_key, mcp_tools)
+    analyze_disadvantages_func = create_disadvantages_analysis_node(google_api_key, mcp_tools)
+    analyze_diseases_func = create_disease_analysis_node(google_api_key, mcp_tools)
+    recommend_alternatives_func = create_alternatives_recommender_node(google_api_key, mcp_tools)
 
     # Define the StateGraph with the HealthAdvisorState schema
     workflow = StateGraph(HealthAdvisorState)

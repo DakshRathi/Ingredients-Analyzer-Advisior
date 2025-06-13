@@ -77,7 +77,7 @@ async def test_mcp_integration():
 
     print("\n--- Testing MCP SerpAPI Integration ---")
     
-    from src.tools.mcp_search_tool import MCPSearchTool
+    from src.tools.mcp_tools import MCPSearchTool
     
     mcp_server_path = Path(__file__).parent / "mcp_servers" / "serpapi_server.py"
     search_tool = MCPSearchTool(str(mcp_server_path))
