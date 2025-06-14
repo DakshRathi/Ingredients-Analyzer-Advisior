@@ -1,4 +1,5 @@
 # src/nodes/alternatives_recommender.py
+import time
 from typing import Optional, List, Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -29,7 +30,8 @@ def create_alternatives_recommender_node(api_key: str, mcp_tools: List[Any]) -> 
     agent_executor = AgentExecutor(agent=agent, tools=mcp_tools, verbose=True)
 
     async def alternatives_recommender_node(state: HealthAdvisorState) -> dict:
-        print("--- Running ReAct Alternatives Recommender Node (Gemini + MCP web_search) ---")
+        print("--- Running ReAct Alternatives Recommender Node ---")
+        start_time = time.time()
 
         if state.get("should_stop_processing", False):
             return {"alternatives_report": HealthyAlternativesReport(summary="Recommendation skipped.", alternatives=[])}
@@ -54,6 +56,7 @@ def create_alternatives_recommender_node(api_key: str, mcp_tools: List[Any]) -> 
             result = await agent_executor.ainvoke(input_data)
             final_llm_output = result.get("output", "{}")
             report = parser.parse(final_llm_output)
+            print(f"Alternatives report generated in {time.time() - start_time:.2f} seconds")
             return {"alternatives_report": report}
         except Exception as e:
             print(f"Error during ReAct alternatives recommendation: {e}")

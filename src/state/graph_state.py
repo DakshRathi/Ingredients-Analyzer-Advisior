@@ -1,3 +1,4 @@
+# src/state/graph_state.py
 from typing import Optional, Annotated
 from typing_extensions import TypedDict
 from langgraph.channels.last_value import LastValue
@@ -22,4 +23,3 @@ class HealthAdvisorState(TypedDict, total=False):
     alternatives_report: Annotated[Optional[HealthyAlternativesReport], LastValue(HealthyAlternativesReport)]
 
     final_analysis: Annotated[Optional[CompleteHealthAnalysis], LastValue(CompleteHealthAnalysis)]
-    current_task_start_time: Annotated[Optional[float], LastValue(float)]

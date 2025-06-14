@@ -1,4 +1,5 @@
 # src/nodes/analysis_nodes.py
+import time
 from typing import List, Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.agents import AgentExecutor, create_tool_calling_agent
@@ -36,7 +37,8 @@ def _create_analysis_node_factory(
 
         async def analysis_node(state: HealthAdvisorState) -> dict:
             node_name = f"{analysis_type.capitalize()} Analysis Node"
-            print(f"--- Running {node_name} (ReAct + Gemini) ---")
+            print(f"--- Running {node_name} ---")
+            start_time = time.time()
 
             if state.get("should_stop_processing", False):
                 return {f"{analysis_type}_analysis": HealthAnalysisReport(
@@ -66,6 +68,7 @@ def _create_analysis_node_factory(
                 result = await agent_executor.ainvoke(input_data)
                 final_llm_output = result.get("output", "{}")
                 report = parser.parse(final_llm_output)
+                print(f"--- {analysis_type}_analysis node completed in {(time.time() - start_time):.2f}s ---")
                 return {f"{analysis_type}_analysis": report}
 
             except Exception as e:
@@ -90,5 +93,5 @@ create_disadvantages_analysis_node = _create_analysis_node_factory(
 )
 
 create_disease_analysis_node = _create_analysis_node_factory(
-    "disease_analysis", DISEASE_ASSOCIATIONS_SYSTEM_PROMPT, DISEASE_ASSOCIATIONS_HUMAN_PROMPT
+    "disease", DISEASE_ASSOCIATIONS_SYSTEM_PROMPT, DISEASE_ASSOCIATIONS_HUMAN_PROMPT
 )

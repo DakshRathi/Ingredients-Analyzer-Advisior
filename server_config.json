@@ -1,14 +1,12 @@
 {
   "mcp_servers": {
     "serpapi_search": {
-      "transport": "sse",
-      "host": "127.0.0.1",
-      "port": 8001
+      "command": "python",
+      "args": ["-m", "src.mcp_servers.serpapi_server"]
     },
     "web_scraper": {
-      "transport": "sse",
-      "host": "127.0.0.1",
-      "port": 8002
+      "command": "python",
+      "args": ["-m", "src.mcp_servers.website_content_server"]
     }
   }
 }

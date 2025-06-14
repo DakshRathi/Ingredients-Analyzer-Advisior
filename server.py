@@ -1,6 +1,6 @@
 # server.py
-
 import os
+import time
 import shutil
 import tempfile
 import contextlib
@@ -9,66 +9,55 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 
-# Import the mcp_app objects from your server files
-from src.mcp_servers.serpapi_server import mcp as serpapi_mcp_app
-from src.mcp_servers.website_content_server import mcp as scraper_mcp_app
-
-# Import your application components
-from src.tools.mcp_tools import ALL_MCP_LANGCHAIN_TOOLS
+from src.integrations.mcp_client_manager import MCPClientManager
 from src.workflows.health_advisor_graph import create_health_advisor_graph
 from src.state.graph_state import HealthAdvisorState
 
+# Load environment variables
 load_dotenv()
+
+# This object will manage the lifecycle of MCP servers.
+mcp_manager = MCPClientManager(config_path="server_config.json")
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Manages the application's startup and shutdown events.
+    The lifespan context manager for the FastAPI application.
+    This function handles the setup on startup and cleanup on shutdown.
     """
     # --- Startup Logic ---
     print("Server is starting up...")
     
-    # 1. Start the session managers for our MCP applications. This is required by fastmcp.
-    async with contextlib.AsyncExitStack() as stack:
-        await stack.enter_async_context(serpapi_mcp_app.session_manager.run())
-        await stack.enter_async_context(scraper_mcp_app.session_manager.run())
+    # Connect to all configured MCP servers and discover their tools
+    await mcp_manager.connect_to_servers()
         
-        # 2. Get API keys
-        groq_api_key = os.getenv("GROQ_API_KEY")
-        google_api_key = os.getenv("GOOGLE_API_KEY")
-        if not groq_api_key or not google_api_key:
-            raise RuntimeError("API keys for Groq and Google are required.")
-            
-        # 3. Discover all MCP tools available in memory    
-        all_mcp_tools = ALL_MCP_LANGCHAIN_TOOLS
+    # Get API keys
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not groq_api_key or not google_api_key:
+        raise RuntimeError("API keys for Groq and Google are required.")
 
-        
-        print(f"Discovered in-memory MCP tools: {[t.name for t in all_mcp_tools]}")
+    # 4. Create the LangGraph application, passing the tools to it
+    app.state.health_advisor_graph = create_health_advisor_graph(
+        groq_api_key=groq_api_key,
+        google_api_key=google_api_key,
+        mcp_tools=mcp_manager.get_tools()
+    )
+    print("Health Advisor Graph initialized successfully.")
 
-        # 4. Create the LangGraph application, passing the tools to it
-        app.state.health_advisor_graph = create_health_advisor_graph(
-            groq_api_key=groq_api_key,
-            google_api_key=google_api_key,
-            mcp_tools=all_mcp_tools
-        )
-        print("Health Advisor Graph initialized successfully.")
-
-        yield # The application is now running
+    yield
 
     # --- Shutdown Logic ---
+    await mcp_manager.cleanup()
     print("Server has shut down.")
 
 # Initialize FastAPI with the lifespan manager
 app = FastAPI(
-    title="Health Advisor API (Streamable HTTP)",
-    version="2.0.0",
+    title="Health Advisor API",
+    description="Analyzes food ingredient images using a LangGraph workflow with ReAct and MCP.",
+    version="1.1.0",
     lifespan=lifespan
 )
-
-# Mount the MCP servers as sub-applications, making them accessible over HTTP
-# This makes them standard and reusable for other potential clients in the future.
-app.mount("/serpapi", serpapi_mcp_app.streamable_http_app())
-app.mount("/scraper", scraper_mcp_app.streamable_http_app())
 
 # Add CORS middleware
 app.add_middleware(
@@ -85,7 +74,6 @@ def read_root():
 
 @app.post("/analyze/")
 async def analyze_food_image(file: UploadFile = File(...)):
-    # ... (This endpoint logic remains exactly the same as before) ...
     health_advisor_app = app.state.health_advisor_graph
     if not health_advisor_app:
         raise HTTPException(status_code=503, detail="The analysis engine is not ready.")
@@ -115,10 +103,13 @@ async def analyze_food_image(file: UploadFile = File(...)):
     }
 
     try:
-        print(f"Starting analysis for temporary file: {temp_file_path}")
+        print("--- Starting Analysis ---")
+        start_time = time.time()
+
         # Run the LangGraph workflow asynchronously
         final_state = await health_advisor_app.ainvoke(initial_state)
         final_report = final_state.get("final_analysis")
+        print(f"--- Analysis Completed in {(time.time() - start_time):.2f} seconds ---")
 
         if final_report is None:
             return JSONResponse(status_code=500, content={"error": "Analysis failed to produce a final report."})

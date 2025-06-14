@@ -1,6 +1,5 @@
 # src/workflows/health_advisor_graph.py
 from langgraph.graph import StateGraph, START, END
-import time
 
 from src.state.graph_state import HealthAdvisorState
 from src.models.data_models import CompleteHealthAnalysis # Import the final Pydantic model
@@ -44,9 +43,7 @@ def create_health_advisor_graph(groq_api_key: str, google_api_key: str, mcp_tool
     
     # Add a final node to compile results
     def compile_final_report_node(state: HealthAdvisorState) -> HealthAdvisorState:
-        print("--- Compiling Final Report Node ---")
-        start_time = time.time()
-        
+
         # Create the final CompleteHealthAnalysis object
         final_report = CompleteHealthAnalysis(
             input_image_path=state["image_path"],
@@ -55,7 +52,7 @@ def create_health_advisor_graph(groq_api_key: str, google_api_key: str, mcp_tool
             disadvantages_analysis=state.get("disadvantages_analysis"),
             disease_analysis=state.get("disease_analysis"),
             alternatives_report=state.get("alternatives_report"),
-            processing_time_seconds=state.get("total_processing_time", 0.0) # This will be set at the end of graph execution
+            processing_time_seconds=0.0
         )
 
         # Generate a simple summary message for the user
@@ -80,8 +77,7 @@ def create_health_advisor_graph(groq_api_key: str, google_api_key: str, mcp_tool
 
         state["final_analysis"] = final_report
         
-        processing_time = time.time() - start_time
-        print(f"--- Final Report Node completed in {processing_time:.2f}s ---")
+        print(f"--- Final Report compiled ---")
         return state
 
     workflow.add_node(NODE_COMPILE_FINAL_REPORT, compile_final_report_node)

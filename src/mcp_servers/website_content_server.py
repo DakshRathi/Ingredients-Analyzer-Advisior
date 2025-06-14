@@ -40,4 +40,4 @@ def fetch_website_content(url: str) -> str:
         return f"Error fetching or parsing content from {url}: {str(e)}"
 
 if __name__ == "__main__":
-    mcp.run(transport="sse")
+    mcp.run(transport="stdio")

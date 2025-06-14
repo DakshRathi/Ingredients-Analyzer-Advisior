@@ -54,4 +54,4 @@ def web_search(query: str, location: str = "United States", num: int = 10) -> st
         return json.dumps({"error": f"Search failed: {str(e)}"})
 
 if __name__ == "__main__":
-    mcp.run(transport="sse")
+    mcp.run(transport="stdio")

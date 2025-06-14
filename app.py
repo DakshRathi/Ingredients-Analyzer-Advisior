@@ -1,5 +1,4 @@
 # app.py
-
 import os
 import streamlit as st
 import requests
@@ -150,7 +149,7 @@ if st.session_state.analysis_result:
                 st.info("No significant disadvantages were identified or an error occurred during analysis.")
         
         with tab3:
-            disease = result.get("disease_analysis")
+            disease = result.get("disease_analysis", {})
             if disease and disease.get('findings'):
                 st.write(f"**Confidence:** {disease.get('confidence_level', 'N/A')}")
                 for finding in disease.get('findings', []):
@@ -166,9 +165,26 @@ if st.session_state.analysis_result:
             alt_list = alternatives.get("alternatives", [])
             if alt_list:
                 for alt in alt_list:
-                    st.markdown(f"**{alt.get('product_name', 'Unknown Alternative')}**")
+                    # Display the product name (as before)
+                    st.markdown(f"#### {alt.get('product_name', 'Unknown Alternative')}")
+                    
+                    # Display the reason (as before)
+                    st.markdown(f"**Why it's a good alternative:**")
                     st.write(f"_{alt.get('reason', 'No reason provided.')}_")
-                    st.markdown("---")
+                    
+                    # Display the nutritional comparison
+                    nutritional_insight = alt.get('nutritional_comparison')
+                    if nutritional_insight:
+                        st.markdown(f"**Nutritional Insight:**")
+                        st.write(nutritional_insight)
+
+                    # Display the availability
+                    availability_info = alt.get('availability')
+                    if availability_info:
+                        st.markdown(f"**Availability:**")
+                        st.write(availability_info)
+                    
+                    st.markdown("---") # Separator
             else:
                 st.success("No specific alternatives were recommended, which may indicate the product is reasonably healthy.")
 

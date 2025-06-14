@@ -32,7 +32,7 @@ def create_ingredient_extractor_node(groq_api_key: str):
         Validates if the image is a food product with ingredients before full extraction.
         """
         print("--- Running Ingredient Extractor Node ---")
-        state['current_task_start_time'] = time.time()
+        start_time = time.time()
         image_path = state["image_path"]
 
         try:
@@ -115,7 +115,7 @@ def create_ingredient_extractor_node(groq_api_key: str):
             state["should_stop_processing"] = True
             state["error_message"] = str(e)
         
-        processing_time = time.time() - state['current_task_start_time']
+        processing_time = time.time() - start_time
         print(f"--- Ingredient Extractor Node completed in {processing_time:.2f}s ---")
         return state
 

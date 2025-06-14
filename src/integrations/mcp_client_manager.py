@@ -1,10 +1,9 @@
 # src/integrations/mcp_client_manager.py
 import json
-import asyncio
 from contextlib import AsyncExitStack
 from typing import List, Dict, Any
 from mcp import ClientSession, StdioServerParameters
-from mcp.client.sse import sse_client
+from mcp.client.stdio import stdio_client
 from langchain.tools import tool as langchain_tool_decorator
 
 class MCPClientManager:
@@ -13,10 +12,17 @@ class MCPClientManager:
     Initializes on application startup and cleans up on shutdown.
     """
     def __init__(self, config_path: str):
+        """
+        Initializes the MCP client manager.
+
+        Args:
+            config_path (str): The path to the configuration file that specifies the
+                MCP servers to connect to.
+        """
         self.config_path = config_path
         self.exit_stack = AsyncExitStack()
         self.tool_to_session: Dict[str, ClientSession] = {}
-        self.available_langchain_tools: List[Any] = []
+        self._available_langchain_tools: List[Any] = []
 
     async def connect_to_servers(self):
         """Reads config, starts all servers, and populates available tools."""
@@ -37,14 +43,11 @@ class MCPClientManager:
     async def _connect_to_server(self, server_name: str, server_config: dict):
         """Connects to a single MCP server and registers its tools."""
         try:
-            print("fata 2")
-            stdio_transport = await self.exit_stack.enter_async_context(sse_client(server_params))
+            server_params = StdioServerParameters(**server_config)
+            stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
             read, write = stdio_transport
-            print("fata 3")
             session = await self.exit_stack.enter_async_context(ClientSession(read, write))
-            print("fata 4")
             await session.initialize()
-            print("fata 5")
 
             response = await session.list_tools()
             tools = response.tools
@@ -52,18 +55,17 @@ class MCPClientManager:
             
             for t in tools:
                 self.tool_to_session[t.name] = session
-                self.available_langchain_tools.append(self._create_langchain_tool(t))
+                self._available_langchain_tools.append(self._create_langchain_tool(t))
         except Exception as e:
             print(f"Failed to connect to MCP server '{server_name}': {e}")
             raise
 
     def _create_langchain_tool(self, mcp_tool):
         """Dynamically creates a LangChain tool from an MCP tool definition."""
-        tool_name = mcp_tool.name
         
-        @langchain_tool_decorator(name=tool_name, description=mcp_tool.description)
+        @langchain_tool_decorator(name_or_callable=mcp_tool.name, description=mcp_tool.description, args_schema=mcp_tool.inputSchema)
         async def dynamic_tool(**kwargs) -> str:
-            return await self.execute_tool(tool_name, kwargs)
+            return await self.execute_tool(mcp_tool.name, kwargs)
         
         return dynamic_tool
 
@@ -80,8 +82,26 @@ class MCPClientManager:
         except Exception as e:
             return f"Error calling tool '{tool_name}': {str(e)}"
 
+    def get_tools(self) -> List[Any]:
+        """
+        Public method to safely retrieve the list of available LangChain tools.
+        """
+        return self._available_langchain_tools
+    
     async def cleanup(self):
         """Closes all connections and shuts down servers gracefully."""
         print("--- Cleaning up MCP connections and shutting down servers... ---")
         await self.exit_stack.aclose()
         print("--- MCP cleanup complete. ---")
+
+if __name__ == "__main__":
+    import asyncio
+
+    manager = MCPClientManager("server_config.json")
+
+    async def main():
+        await manager.connect_to_servers()
+        print("Available tools:", manager.get_tools())
+        await manager.cleanup()
+
+    asyncio.run(main())
